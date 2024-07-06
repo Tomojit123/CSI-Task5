@@ -1,0 +1,58 @@
+CREATE PROCEDURE UpdateSubjectAllotments
+AS
+BEGIN
+    -- Declare a cursor to iterate through all requests
+    DECLARE cur CURSOR FOR
+    SELECT StudentId, SubjectId
+    FROM SubjectRequest;
+    
+    DECLARE @StudentId VARCHAR(50);
+    DECLARE @NewSubjectId VARCHAR(50);
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @StudentId, @NewSubjectId;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        
+        IF EXISTS (SELECT 1 FROM SubjectAllotments WHERE StudentId = @StudentId)
+        BEGIN
+            -- Get the current valid subject for the student
+            DECLARE @CurrentSubjectId VARCHAR(50);
+            SELECT @CurrentSubjectId = SubjectId
+            FROM SubjectAllotments
+            WHERE StudentId = @StudentId AND Is_Valid = 1;
+
+            -- If the current subject is different from the requested one, update the allotments
+            IF @CurrentSubjectId <> @NewSubjectId
+            BEGIN
+                -- Invalidate the current valid subject
+                UPDATE SubjectAllotments
+                SET Is_Valid = 0
+                WHERE StudentId = @StudentId AND Is_Valid = 1;
+
+               
+                INSERT INTO SubjectAllotments (StudentId, SubjectId, Is_Valid)
+                VALUES (@StudentId, @NewSubjectId, 1);
+            END
+        END
+        ELSE
+        BEGIN
+            -- If the student does not exist in SubjectAllotments, insert the new subject as valid
+            INSERT INTO SubjectAllotments (StudentId, SubjectId, Is_Valid)
+            VALUES (@StudentId, @NewSubjectId, 1);
+        END
+
+        FETCH NEXT FROM cur INTO @StudentId, @NewSubjectId;
+    END
+
+    CLOSE cur;
+    DEALLOCATE cur;
+    
+    -- Clear the SubjectRequest table
+    DELETE FROM SubjectRequest;
+END
+GO
+  
+
+EXEC UpdateSubjectAllotments;
